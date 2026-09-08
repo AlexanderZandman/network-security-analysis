@@ -1,0 +1,7 @@
+[project]
+name = "network-security-analysis"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = ["pandas", "numpy", "scikit-learn", "xgboost", "seaborn", "matplotlib", "matplotlib-inline", "ipython", "pygments"]
