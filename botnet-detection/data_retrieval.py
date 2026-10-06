@@ -11,8 +11,8 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 ROOT = Path(__file__).parent
-SRC = ROOT / "datasets/opt/Malware-Project/BigDataset/IoTScenarios"
-OUT = ROOT / "datasets/iot23_parquet"
+SRC = ROOT / "botnet-detection/datasets/opt/Malware-Project/BigDataset/IoTScenarios"
+OUT = ROOT / "botnet-detection/datasets/iot23_parquet"
 CHUNK_ROWS = 1_000_000
 
 COLUMNS = [
