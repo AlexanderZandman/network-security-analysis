@@ -28,8 +28,8 @@ def train_models(features_df, y, detailed_label):
     return botnet_detector, attack_classifier
 
 def save_models(botnet_detector, attack_classifier):
-    joblib.dump(botnet_detector, "botnet_detector.pkl")
-    joblib.dump(attack_classifier, "attack_classifier.pkl")
+    joblib.dump(botnet_detector, "saved-models/botnet_detector.pkl")
+    joblib.dump(attack_classifier, "saved-models/attack_classifier.pkl")
     print(f"models saved")
 
 
