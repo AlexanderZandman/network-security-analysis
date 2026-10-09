@@ -11,5 +11,6 @@ wheels/
 .idea
 
 datasets/
+logs/
 *.pdf
 .env
