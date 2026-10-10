@@ -44,7 +44,7 @@ class TCP:
 
     @classmethod
     def from_dict(cls, data: Optional[Dict[str, Any]]) -> Optional["TCP"]:
-        if not data:
+        if not data or (data != data): # make sure event is valid and not NaN
             return None
         return cls(
             tcp_flags=data.get("tcp_flags"),
