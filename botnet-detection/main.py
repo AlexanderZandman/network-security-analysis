@@ -5,6 +5,7 @@ import argparse
 import pandas as pd
 from pathlib import Path
 from Suricata_Event import Suricata_Event
+from events_mapping import map_suricata_events_to_dataframe
 
 def parse_eve(file: Path) -> list[Suricata_Event]:
     # read JSON input
@@ -40,7 +41,7 @@ def run_detection(args):
          print(f"  {event.src_ip}:{event.src_port} -> {event.dest_ip}:{event.dest_port} ({event.proto})")
 
     # Map the events from Suricata to our model
-
+    features_df = map_suricata_events_to_dataframe(events)
     # Call our model to detect anomalies
 
     # Output report
