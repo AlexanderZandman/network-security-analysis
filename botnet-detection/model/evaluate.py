@@ -4,7 +4,7 @@ from sklearn.metrics import classification_report, roc_auc_score, average_precis
 from sklearn.model_selection import StratifiedGroupKFold
 from xgboost import XGBClassifier
 
-from features import ATTACK, create_features_df, load_dataset
+from model.features import ATTACK, create_features_df, load_dataset
 
 
 def evaluate_botnet_vs_benign_classification(features_df, cross_validation, y, groups, detailed_label):

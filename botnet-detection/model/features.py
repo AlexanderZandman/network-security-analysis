@@ -1,6 +1,8 @@
+from pathlib import Path
+
 import pandas as pd
 
-DATA_PATH = "../datasets/sample/iot23_sample.parquet"
+DATA_PATH = Path(__file__).parent.parent / "datasets/sample/iot23_sample.parquet"
 
 # Attacks are grouped into three categories: scanning, attack, and C&C.
 # Sidenote: C&C is command and control, which is the communication channel between the botnet and the botnet operator.

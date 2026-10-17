@@ -1,8 +1,12 @@
+from pathlib import Path
+
 import joblib
 import numpy as np
 from xgboost import XGBClassifier
 
-from features import ATTACK, create_features_df, load_dataset
+from model.features import ATTACK, create_features_df, load_dataset
+
+MODEL_DIR = Path(__file__).parent / "saved-models"
 
 def train_models(features_df, y, detailed_label):
     botnet_detector = XGBClassifier(
@@ -28,8 +32,8 @@ def train_models(features_df, y, detailed_label):
     return botnet_detector, attack_classifier
 
 def save_models(botnet_detector, attack_classifier):
-    joblib.dump(botnet_detector, "saved-models/botnet_detector.pkl")
-    joblib.dump(attack_classifier, "saved-models/attack_classifier.pkl")
+    joblib.dump(botnet_detector, MODEL_DIR / "botnet_detector.pkl")
+    joblib.dump(attack_classifier, MODEL_DIR / "attack_classifier.pkl")
     print(f"models saved")
 
 
