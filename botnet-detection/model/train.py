@@ -17,30 +17,18 @@ def train_models(features_df, detailed_label, y = None, classification_type: str
         return binary_classifier
 
     elif classification_type == "nineway":
-        # bot = y == 1
-        # attack_bot = detailed_label[bot].map(ATTACK)
-        # assert attack_bot.notna().all(), "new detailed_label not in ATTACK"
-        
-        label_indeces = {}
-        [label_indeces.setdefault(x, len(label_indeces)) for x in detailed_label]
-        print("LABEL INDECES")
-        print(label_indeces.values())
-
-
-        # Resize dataset
-        # if len(label_indeces) % len(features_df) != 0:
-        #     features_df = features_df.head(len(features_df) - (len(label_indeces) % len(features_df)))
-
-        label_mapped = detailed_label.map(label_indeces) # np.searchsorted(classes, attack_bot),
-        
-        classes = np.array(sorted(detailed_label.unique()))
-        counts = detailed_label.value_counts()
+        bot = y == 1
+        attack_bot = detailed_label[bot].map(ATTACK)
+        assert attack_bot.notna().all(), "new detailed_label not in ATTACK"
+        classes = np.array(sorted(attack_bot.unique()))
+        counts = attack_bot.value_counts()
         attack_classifier = XGBClassifier(
             n_estimators=150, max_depth=7, learning_rate=0.1,
             tree_method="hist", enable_categorical=True, random_state=42,
         )
-        attack_classifier.fit(features_df, label_mapped,
-                            sample_weight=detailed_label.map((counts.max() / counts) ** 0.5))
+        attack_classifier.fit(features_df[bot], np.searchsorted(classes, attack_bot),
+                            sample_weight=attack_bot.map((counts.max() / counts) ** 0.5))
+
         return attack_classifier
 
     else:
@@ -60,11 +48,10 @@ def main():
     nineway_features_df = create_features_df(df)
 
     y_binary = (df_undersampled["label"] == "malicious").astype(int) 
-
-
+    y_nineway = (df["label"] == "malicious").astype(int)
 
     binary_classifier = train_models(binary_features_df, df["detailed_label"], y_binary, "binary")
-    nineway_classifier =  train_models(nineway_features_df, df["detailed_label"])
+    nineway_classifier =  train_models(nineway_features_df, df["detailed_label"], y_nineway, "nineway")
 
     save_models(binary_classifier, nineway_classifier)
 
