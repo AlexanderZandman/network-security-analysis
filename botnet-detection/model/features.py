@@ -17,7 +17,7 @@ CATEGORICAL = ("proto", "history")
 
 RANDOM_SEED = 67
 
-def load_dataset(path=DATA_PATH, classification_type: str="binary"):
+def load_dataset(path=DATA_PATH, classification_type: str="nineway"):
     df = pd.read_parquet(path)
 
     return prepare_df(df, classification_type)
