@@ -15,14 +15,14 @@ ATTACK = {
 
 CATEGORICAL = ("proto", "history")
 
-RANDOM_SEED = 67
+RANDOM_SEED = 68 - 1
 
-def load_dataset(path=DATA_PATH, classification_type: str="nineway"):
+def load_dataset(path=DATA_PATH):
     df = pd.read_parquet(path)
 
-    return prepare_df(df, classification_type)
+    return prepare_df(df)
 
-def prepare_df(input_df, classification_type: str):
+def prepare_df(input_df):
     """
         Preprocess the dataset to clean up data points.
     """
@@ -39,10 +39,6 @@ def prepare_df(input_df, classification_type: str):
         unit="s",
         utc=True
     )
-
-    # Balance out classes for binary
-    if classification_type == "binary":
-        input_df = undersample(input_df)
 
     # -----Deal with NaN values-----
     
@@ -82,38 +78,21 @@ def undersample(input_df):
     malicious = malicious.sample(n=len(benign), random_state=RANDOM_SEED)
 
     balanced_df = (pd.concat([benign, malicious])
-                        .sample(frac=1, random_state=RANDOM_SEED)  # shuffle
+                        .sample(frac=1, random_state=RANDOM_SEED)
                         .reset_index(drop=True)
     )
 
     return balanced_df
 
-def create_features_df(input_df, classification_type: str = "binary"):
+def create_features_df(input_df):
     """
         Create a dataframe of features for a given type of classification model.
     """
-    time_window_10s = input_df["ts"].dt.floor("10s")
     time_window_1min = input_df["ts"].dt.floor("1min")
 
     src = input_df.groupby(["scenario", "id.orig_h", time_window_1min])
-
     dst = input_df.groupby(["scenario", "id.resp_h", time_window_1min])
 
-    # src_10s = input_df.groupby(["scenario", "id.orig_h", time_window_10s])
-    # src_1min = input_df.groupby(["scenario", "id.orig_h", time_window_1min])
-
-    # dst_10s = input_df.groupby(["scenario", "id.resp_h", time_window_10s])
-    # dst_1min = input_df.groupby(["scenario", "id.resp_h", time_window_1min])
-
-    # if classification_type == "binary":
-    #     return pd.DataFrame()
-    # elif classification_type == "nineway":
-    #     pass
-    # else:
-    #     raise Exception("Unexpected input")
-
-    # # TODO: remove
-    # # Old feature return
     return pd.DataFrame({
         "proto": input_df["proto"].astype("category"),
         "duration": input_df["duration"],
