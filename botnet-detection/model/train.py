@@ -12,10 +12,7 @@ MODEL_DIR = Path(__file__).parent / "saved-models"
 METADATA_COLUMNS = ["row_id", "scenario", "final_class"]
 CATEGORICAL_COLUMNS = ["proto", "history"]
 
-
-def train_models(features_df, categorised_lables, normal_labels):
-    print(f"Training botnet detector and attack classifier")
-
+def train_botnet_detector(features_df, categorised_lables, y):
     # y = 1 if the row is a botnet row, 0 if the row is a benign row
     y = categorised_lables.ne("benign").astype(int)
 
@@ -39,7 +36,9 @@ def train_models(features_df, categorised_lables, normal_labels):
     )
     botnet_detector.fit(features_df, y)
     print(f"Botnet detector trained")
+    return botnet_detector
 
+def train_attack_classifier(features_df, categorised_lables, y):
     # Lable mapping for the attack classifier
     label_map = {"attack": 0, "scanning": 1, "c2": 2}
     
@@ -78,7 +77,10 @@ def train_models(features_df, categorised_lables, normal_labels):
         sample_weight=attack_weights
     )
     print(f"Attack classifier trained")
+    return attack_classifier
 
+
+def train_everything_classifier(features_df, normal_labels):
     # Get all the unique types of attacks
     attack_types = set(normal_labels)
     print(f"Training everything classifier for {len(attack_types)} classes: {list(attack_types)}")
@@ -115,7 +117,7 @@ def train_models(features_df, categorised_lables, normal_labels):
 
     print(f"Everything classifier trained") 
 
-    return botnet_detector, attack_classifier, everything_classifier
+    return everything_classifier
 
 # Save the trained models to disk and if not provided, skip it.
 def save_models(botnet_detector = None, attack_classifier = None, everything_classifier = None):
@@ -152,7 +154,9 @@ def main():
             sample_df = sample_df.drop(columns=column)
     print(f"Dataframe columns after: {sample_df.columns.tolist()} \n")
 
-    botnet_detector, attack_classifier, everything_classifier = train_models(features_df, categorised_lables, labels_vector)
+    botnet_detector = train_botnet_detector(features_df, categorised_lables, labels_vector)
+    attack_classifier = train_attack_classifier(features_df, categorised_lables, labels_vector)
+    everything_classifier = train_everything_classifier(features_df, categorised_lables)
 
     save_models(botnet_detector, attack_classifier, everything_classifier)
     print("Training complete. Models saved to disk.")
