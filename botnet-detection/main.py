@@ -4,7 +4,7 @@ import os
 import argparse
 import pandas as pd
 from pathlib import Path
-from Suricata_Event import Suricata_Event
+from suricata_event import Suricata_Event
 from events_mapping import map_suricata_events_to_dataframe
 
 def parse_eve(file: Path) -> list[Suricata_Event]:
