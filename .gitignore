@@ -14,3 +14,4 @@ datasets/
 logs/
 *.pdf
 .env
+data/

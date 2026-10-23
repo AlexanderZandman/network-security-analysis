@@ -1,6 +1,6 @@
 import pandas as pd
 
-DATA_PATH = "../datasets/sample/iot23_sample.parquet"
+DATA_PATH = "data/CTU-IoT-Malware-Capture-34-1.parquet"
 
 # Attacks are grouped into three categories: scanning, attack, and C&C.
 # Sidenote: C&C is command and control, which is the communication channel between the botnet and the botnet operator.
@@ -36,7 +36,7 @@ def prepare_df(input_df):
 
 
 def create_features_df(input_df):
-    time_window = input_df["ts"].dt.floor("10min")
+    time_window = input_df["ts"].dt.floor("1min")
     src = input_df.groupby(["scenario", "id.orig_h", time_window])
     dst = input_df.groupby(["scenario", "id.resp_h", time_window])
     return pd.DataFrame({
