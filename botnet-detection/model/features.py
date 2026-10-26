@@ -100,7 +100,7 @@ def create_features_df(input_df):
         "resp_ip_bytes": input_df["resp_ip_bytes"],
         "is_single_pkt": (input_df["duration"] == 0).astype(int),
         "has_response": (input_df["resp_pkts"] > 0).astype(int),
-        "history": input_df["history"].astype("category"),
+        # "history": input_df["history"].astype("category"),
         # how many connections are made to the same destination host in a 10-minute time_window
         "dst_conn_cnt_in_time_window": dst["uid"].transform("size"),
         # how many unique source hosts are connecting to the same destination host in a 10-minute time_window
@@ -110,5 +110,5 @@ def create_features_df(input_df):
         "src_uniq_dst_ip_in_time_window": src["id.resp_h"].transform("nunique"),
         "src_uniq_dst_port_in_time_window": src["id.resp_p"].transform("nunique"),
         "src_no_reply_ratio_in_time_window": (input_df["resp_pkts"] == 0).groupby(
-            [input_df["scenario"], input_df["id.orig_h"], time_window_1min]).transform("mean"),
+            [input_df["scenario"], input_df["id.orig_h"], time_window]).transform("mean"),
     })

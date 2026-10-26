@@ -4,16 +4,19 @@ import joblib
 import numpy as np 
 from xgboost import XGBClassifier
 import pandas as pd
-from features import ATTACK, create_features_df, load_dataset
+from features import ATTACK, create_features_df, load_dataset, undersample
+from sklearn.model_selection import train_test_split, StratifiedKFold, StratifiedGroupKFold
+from sklearn.metrics import classification_report, roc_auc_score, average_precision_score
 
 MODEL_DIR = Path(__file__).parent / "saved-models"
 
 # Those are the columns that are not features but were used for testing purposes
-METADATA_COLUMNS = ["row_id", "scenario", "final_class"]
+METADATA_COLUMNS = ["row_id", "final_class"]
 CATEGORICAL_COLUMNS = ["proto", "history"]
 
 def train_botnet_detector(features_df, categorised_lables, y):
     # y = 1 if the row is a botnet row, 0 if the row is a benign row
+    # TODO: This line overrides the arg, figure out what's going on
     y = categorised_lables.ne("benign").astype(int)
 
     print(f"Training botnet detector for {y.sum()} botnet rows and {len(y) - y.sum()} benign rows")
@@ -34,8 +37,21 @@ def train_botnet_detector(features_df, categorised_lables, y):
         scale_pos_weight=0.345, # Ratio of benign to botnet rows in the training data, to help with class imbalance
         max_delta_step=1
     )
-    botnet_detector.fit(features_df, y)
+
+    cross_validation = StratifiedGroupKFold(n_splits=5, shuffle=True, random_state=42)
+    oof = np.zeros(len(features_df))
+    for train_idx, test_idx in cross_validation.split(features_df, y, features_df["scenario"]):
+        train = features_df.loc[train_idx]
+        #TODO: needs to be undersampled
+        test = features_df.loc[test_idx]
+        botnet_detector.fit(train, y.loc[train_idx])
+        oof[test_idx] = botnet_detector.predict_proba(test)[:, 1]
+    
     print(f"Botnet detector trained")
+    print("Botnet vs Benign Classification Report: ")
+    print(f"ROC-AUC = {roc_auc_score(y, oof):.4f}")
+    print(f"PR-AUC = {average_precision_score(y, oof):.4f}")
+    print(classification_report(y, oof > 0.5, target_names=["benign", "botnet"], digits=4))
     return botnet_detector
 
 def train_attack_classifier(features_df, categorised_lables, y):
@@ -71,23 +87,37 @@ def train_attack_classifier(features_df, categorised_lables, y):
         eval_metric="mlogloss",
         random_state=42
     )
-    attack_classifier.fit(
-        features_df[botnet_indices], 
-        y_attack, 
-        sample_weight=attack_weights
-    )
+
+    cross_validation = StratifiedGroupKFold(n_splits=5, shuffle=True, random_state=42)
+    oof = np.empty(len(y), dtype=object)
+
+    for train_idx, test_idx in cross_validation.split(features_df, y_attack, features_df["scenario"]):
+        train = features_df.loc[train_idx]
+        test = features_df.loc[test_idx]
+
+        attack_classifier.fit(
+            train[botnet_indices], 
+            y_attack.loc[train_idx], 
+            sample_weight=attack_weights.loc[train_idx]
+        )
+        oof[test_idx] = attack_classes[attack_classifier.predict(test[botnet_indices])]
     print(f"Attack classifier trained")
+
+    print("Attack Type Classification Report: ")
+    print(classification_report(y_attack, oof, digits=4, zero_division=0))
+    print(pd.crosstab(y_attack, oof, rownames=["true"], colnames=["predicted"])) 
+
     return attack_classifier
 
 
-def train_everything_classifier(features_df, normal_labels):
+def train_everything_classifier(features_df, categorised_labels):
     # Get all the unique types of attacks
-    attack_types = set(normal_labels)
+    attack_types = set(categorised_labels)
     print(f"Training everything classifier for {len(attack_types)} classes: {list(attack_types)}")
     # Convert it to a map
     mapping = {item: i for i, item in enumerate(attack_types)}
     # Map the normal labels to the new mapping
-    y_multi = normal_labels.map(mapping)
+    y_multi = categorised_labels.map(mapping)
     # Get the counts for each class in the new mapping
     all_counts = y_multi.value_counts()
     print(f"Everything classifier counts: {all_counts.to_dict()}")
@@ -109,13 +139,26 @@ def train_everything_classifier(features_df, normal_labels):
         eval_metric="mlogloss",
         random_state=42
     )
-    everything_classifier.fit(
-        features_df, 
-        y_multi, 
-        sample_weight=all_weights
-    )
+
+    cross_validation = StratifiedGroupKFold(n_splits=5, shuffle=True, random_state=42)
+    oof = np.empty(len(y_multi), dtype=object)
+
+    for train_idx, test_idx in cross_validation.split(features_df, y_multi, features_df["scenario"]):
+            train = features_df.loc[train_idx]
+            test = features_df.loc[test_idx]
+    
+            everything_classifier.fit(
+                    train, 
+                    y_multi, 
+                    sample_weight=all_weights
+            )
+            oof[test_idx] = y_multi[everything_classifier.predict(create_features_df(test))]
 
     print(f"Everything classifier trained") 
+
+    print("Direct Classification Report: ")
+    print(classification_report(y_multi, oof, digits=4, zero_division=0))
+    print(pd.crosstab(y_multi, oof, rownames=["true"], colnames=["predicted"]))
 
     return everything_classifier
 
@@ -153,7 +196,6 @@ def main():
         if column in sample_df.columns:
             sample_df = sample_df.drop(columns=column)
     print(f"Dataframe columns after: {sample_df.columns.tolist()} \n")
-
     botnet_detector = train_botnet_detector(features_df, categorised_lables, labels_vector)
     attack_classifier = train_attack_classifier(features_df, categorised_lables, labels_vector)
     everything_classifier = train_everything_classifier(features_df, categorised_lables)
