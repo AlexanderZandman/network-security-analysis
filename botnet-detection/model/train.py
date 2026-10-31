@@ -1,12 +1,12 @@
 from pathlib import Path
 
-import joblib
-import numpy as np 
-from xgboost import XGBClassifier
+import numpy as np
 import pandas as pd
-from features import ATTACK, create_features_df, load_dataset, undersample
-from sklearn.model_selection import train_test_split, StratifiedKFold, StratifiedGroupKFold
 from sklearn.metrics import classification_report, roc_auc_score, average_precision_score
+from sklearn.model_selection import StratifiedGroupKFold
+from xgboost import XGBClassifier
+
+from model.features import ATTACK, create_features_df
 
 MODEL_DIR = Path(__file__).parent / "saved-models"
 
