@@ -1,74 +1,49 @@
-from datetime import timedelta
-from time import sleep
-import os
 import argparse
-import pandas as pd
 from pathlib import Path
-from suricata_event import Suricata_Event
-from events_mapping import map_suricata_events_to_dataframe
+from time import sleep
+from botnetdetector import BotnetDetector
+from suricata.eve_consumer import EveConsumer
 
-def parse_eve(file: Path) -> list[Suricata_Event]:
-    # read JSON input
-    # TODO: optimize this: in its current state, after every filechange, the ENTIRE file is read
-    df = pd.read_json(file)
-
-    # Convert timestamps to datetime
-    df['timestamp'] = pd.to_datetime(df['timestamp'])
-
-    latest = df.iloc[-1].timestamp
-
-    # Filter the dataframe up to one minute before the latest timestamp
-    one_minute_ago = latest - timedelta(minutes=1)
-    df = df[df['timestamp'] >= one_minute_ago]
-
-    print(df.head())
-    events = []
-
-    for item in df.itertuples(index=False):
-        event = Suricata_Event.from_dict(item._asdict())
-        events.append(event)
-    
-    return events
-
-def run_detection(args):
-    # Parse the eve.json
-    events = parse_eve(args.input)
-
-    print(f"Parsed {len(events)} events")
-
-    # TODO: Debug output, remove
-    for event in events:
-         print(f"  {event.src_ip}:{event.src_port} -> {event.dest_ip}:{event.dest_port} ({event.proto})")
-
-    # Map the events from Suricata to our model
-    features_df = map_suricata_events_to_dataframe(events)
-    # Call our model to detect anomalies
-
-    # Output report
+DEFAULT_EVE_PATH = Path(__file__).parent / "logs/eve.json"
 
 def main(args):
     print("Starting program...")
-    last_modified = os.path.getmtime(args.input)
+    botnet_detector = BotnetDetector(threshold=args.threshold)
+    eve_tracker = EveConsumer(args.input, from_end=args.from_end)
+    print(f"Following {args.input}, alerts go to {args.fast_log} and {args.alert_eve}")
 
-    # Poll a file every minute.
-    # If it was changed, do a new anomaly detection
     while True:
-        current_modified = os.path.getmtime(file_path)
+        lines = eve_tracker.read_new_lines(args.batch_size)
+        if eve_tracker.restarted:
+            # Flows from the previous file must not count towards the new flows' features
+            botnet_detector.reset()
+        if lines:
+            botnet_detector.process_flows(lines, args.fast_log, args.alert_eve)
+        if len(lines) < args.batch_size:
+            # Caught up with the file; wait for Suricata to log new data
+            sleep(args.interval)
 
-        if current_modified != last_modified:
-            print("File has changed!")
-            last_modified = current_modified
-            run_detection(args)
-        
-        sleep(60) # wait for a minute
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("-i", "--input", required=True, help="Path to the file to monitor")
+    parser.add_argument("-i", "--input", type=Path, default=DEFAULT_EVE_PATH,
+                        help="Path to Suricata's eve.json to follow (default: botnet-detection/logs/eve.json)")
+    parser.add_argument("--from-end", action="store_true",
+                        help="Skip the lines already in the file and only analyze lines appended from now on")
+    parser.add_argument("-b", "--batch-size", type=int, default=1000,
+                        help="Maximum number of lines analyzed at once (default: 1000)")
+    parser.add_argument("--interval", type=float, default=3,
+                        help="Seconds to wait for new lines once the end of the file is reached (default: 3)")
+    parser.add_argument("--threshold", type=float, default=0.5,
+                        help="Botnet probability threshold (default: 0.5)")
+    parser.add_argument("--fast-log", type=Path, default=None,
+                        help="Path to append fast.log-style alerts (default: <input dir>/ml_fast.log)")
+    parser.add_argument("--alert-eve", type=Path, default=None,
+                        help="Path to append eve.json-style alerts (default: <input dir>/ml_eve.json)")
     args = parser.parse_args()
 
-    file_path = args.input
-
-    if not os.path.exists(file_path):
-        raise FileNotFoundError(f"File not found: {file_path}")
+    if not args.input.exists():
+        raise FileNotFoundError(f"File not found: {args.input}")
+    args.fast_log = args.fast_log or args.input.parent / "ml_fast.log"
+    args.alert_eve = args.alert_eve or args.input.parent / "ml_eve.json"
     main(args)
