@@ -84,11 +84,11 @@ def undersample(input_df):
 
     return balanced_df
 
-def create_features_df(input_df):
+def create_features_df(input_df, time_window="10s"):
     """
         Create a dataframe of features for a given type of classification model.
     """
-    time_window = input_df["ts"].dt.floor("1min")
+    time_window = input_df["ts"].dt.floor(time_window)
     src = input_df.groupby(["scenario", "id.orig_h", time_window])
     dst = input_df.groupby(["scenario", "id.resp_h", time_window])
     return pd.DataFrame({
