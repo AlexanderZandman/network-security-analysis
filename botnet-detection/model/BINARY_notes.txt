@@ -1,0 +1,91 @@
+Binary classifier with scale_pos_weight=0.345:
+Botnet vs Benign Classification Report: 
+ROC-AUC = 0.6817
+PR-AUC = 0.8111
+              precision    recall  f1-score   support
+
+      benign     0.4058    0.5724    0.4749     38880
+      botnet     0.8298    0.7132    0.7671    113625
+
+    accuracy                         0.6773    152505
+   macro avg     0.6178    0.6428    0.6210    152505
+weighted avg     0.7217    0.6773    0.6926    152505
+
+
+Binary classifier without it (scale_pos_weight=1.0):
+Botnet vs Benign Classification Report: 
+ROC-AUC = 0.7157
+PR-AUC = 0.8214
+              precision    recall  f1-score   support
+
+      benign     0.5094    0.6431    0.5685     38880
+      botnet     0.8658    0.7881    0.8251    113625
+
+    accuracy                         0.7511    152505
+   macro avg     0.6876    0.7156    0.6968    152505
+weighted avg     0.7749    0.7511    0.7597    152505
+
+Binary classifier with dynamic scale_pos_weight based on the training data:
+Botnet vs Benign Classification Report: 
+ROC-AUC = 0.6789
+PR-AUC = 0.8116
+              precision    recall  f1-score   support
+
+      benign     0.4054    0.5720    0.4745     38880
+      botnet     0.8296    0.7129    0.7668    113625
+
+    accuracy                         0.6770    152505
+   macro avg     0.6175    0.6425    0.6207    152505
+weighted avg     0.7214    0.6770    0.6923    152505
+
+Binary classifier with features as 30-second time windows instead of 10-second time windows (the previous model used 10-second time windows):
+Botnet vs Benign Classification Report: 
+ROC-AUC = 0.6518
+PR-AUC = 0.8386
+              precision    recall  f1-score   support
+
+      benign     0.3166    0.4779    0.3808     38880
+      botnet     0.7836    0.6469    0.7087    113625
+
+    accuracy                         0.6038    152505
+   macro avg     0.5501    0.5624    0.5448    152505
+weighted avg     0.6645    0.6038    0.6252    152505
+
+Random Seed = 45:
+Botnet vs Benign Classification Report: 
+ROC-AUC = 0.7147
+PR-AUC = 0.8237
+              precision    recall  f1-score   support
+
+      benign     0.5276    0.6436    0.5799     38880
+      botnet     0.8681    0.8028    0.8342    113625
+
+    accuracy                         0.7622    152505
+   macro avg     0.6979    0.7232    0.7070    152505
+weighted avg     0.7813    0.7622    0.7694    152505
+
+Random Seed = 50:
+Botnet vs Benign Classification Report: 
+ROC-AUC = 0.7158
+PR-AUC = 0.8182
+              precision    recall  f1-score   support
+
+      benign     0.5299    0.6442    0.5815     38880
+      botnet     0.8686    0.8044    0.8353    113625
+
+    accuracy                         0.7636    152505
+   macro avg     0.6992    0.7243    0.7084    152505
+weighted avg     0.7822    0.7636    0.7706    152505
+
+Random Seed = 50 and time window = 5s:
+Botnet vs Benign Classification Report: 
+ROC-AUC = 0.7406
+PR-AUC = 0.8362
+              precision    recall  f1-score   support
+
+      benign     0.6180    0.6388    0.6282     38880
+      botnet     0.8750    0.8649    0.8699    113625
+
+    accuracy                         0.8072    152505
+   macro avg     0.7465    0.7519    0.7491    152505
+weighted avg     0.8095    0.8072    0.8083    152505

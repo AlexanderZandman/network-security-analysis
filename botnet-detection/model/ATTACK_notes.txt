@@ -1,0 +1,126 @@
+Time window = 5s and random seed = 50:
+Attack Type Classification Report: 
+              precision    recall  f1-score   support
+
+           0     0.9866    0.7605    0.8589     44005
+           1     0.5227    0.2864    0.3700     32071
+           2     0.5133    0.8493    0.6399     37549
+
+    accuracy                         0.6560    113625
+   macro avg     0.6742    0.6321    0.6229    113625
+weighted avg     0.6992    0.6560    0.6485    113625
+
+predicted      0     1      2
+true                         
+0          33465  2731   7809
+1            455  9185  22431
+2              0  5657  31892
+
+Time window = 10s and random seed = 50:
+Attack Type Classification Report: 
+              precision    recall  f1-score   support
+
+           0     0.9549    0.7610    0.8470     44005
+           1     0.4678    0.5668    0.5126     32071
+           2     0.6202    0.6558    0.6375     37549
+
+    accuracy                         0.6714    113625
+   macro avg     0.6810    0.6612    0.6657    113625
+weighted avg     0.7068    0.6714    0.6834    113625
+
+predicted      0      1      2
+true                          
+0          33486   8103   2416
+1           1229  18177  12665
+2            351  12573  24625
+
+Time window = 30s and random seed = 50:
+Attack Type Classification Report: 
+              precision    recall  f1-score   support
+
+           0     0.9873    0.7541    0.8550     44005
+           1     0.6061    0.6993    0.6494     32071
+           2     0.7706    0.8827    0.8228     37549
+
+    accuracy                         0.7811    113625
+   macro avg     0.7880    0.7787    0.7757    113625
+weighted avg     0.8081    0.7811    0.7863    113625
+
+predicted      0      1      2
+true                          
+0          33182  10511    312
+1             88  22426   9557
+2            340   4064  33145
+Training complete. Models saved to disk.
+
+Time window = 1min and random seed = 50:
+Attack Type Classification Report: 
+              precision    recall  f1-score   support
+
+           0     0.9999    0.7541    0.8597     44005
+           1     0.6405    0.7396    0.6865     32071
+           2     0.8005    0.9254    0.8584     37549
+
+    accuracy                         0.8066    113625
+   macro avg     0.8136    0.8064    0.8016    113625
+weighted avg     0.8326    0.8066    0.8104    113625
+
+predicted      0      1      2
+true                          
+0          33182  10511    312
+1              4  23720   8347
+2              0   2801  34748
+
+Time window = 2min and random seed = 50:
+Attack Type Classification Report: 
+              precision    recall  f1-score   support
+
+           0     0.9996    0.7541    0.8596     44005
+           1     0.6843    0.7211    0.7022     32071
+           2     0.8018    0.9958    0.8883     37549
+
+    accuracy                         0.8246    113625
+   macro avg     0.8286    0.8237    0.8167    113625
+weighted avg     0.8452    0.8246    0.8247    113625
+
+predicted      0      1      2
+true                          
+0          33182  10512    311
+1             13  23125   8933
+2              0    156  37393
+
+time window = 1min and random seed = 55 and min_child_weight = 3:
+Attack Type Classification Report:
+              precision    recall  f1-score   support
+
+           0     0.9999    0.7541    0.8597     44005
+           1     0.6553    0.7491    0.6991     32071
+           2     0.8092    0.9434    0.8711     37549
+
+    accuracy                         0.8152    113625
+   macro avg     0.8214    0.8155    0.8100    113625
+weighted avg     0.8396    0.8152    0.8182    113625
+
+predicted      0      1      2
+true
+0          33182  10511    312
+1              4  24025   8042
+2              0   2127  35422
+
+time window = 1min and random seed = 55 and min_child_weight = 3 and colsample_bytree = 0.6:
+Attack Type Classification Report: 
+              precision    recall  f1-score   support
+
+           0     0.9998    0.7541    0.8597     44005
+           1     0.6593    0.7586    0.7055     32071
+           2     0.8152    0.9452    0.8754     37549
+
+    accuracy                         0.8185    113625
+   macro avg     0.8248    0.8193    0.8135    113625
+weighted avg     0.8427    0.8185    0.8214    113625
+
+predicted      0      1      2
+true                          
+0          33182  10511    312
+1              6  24330   7735
+2              0   2059  35490
