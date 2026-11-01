@@ -5,11 +5,10 @@ import joblib
 import numpy as np
 import pandas as pd
 
-from model.features import BENIGN_LABEL, FEATURE_TIME_WINDOW, load_dataset
+from model.features import BENIGN_LABEL, FEATURE_TIME_WINDOW
 from suricata.events_mapping import flow_df_to_features
 
 MODEL_DIR = Path(__file__).parent / "saved-models"
-TRAINING_DATA_PATH = Path(__file__).parent.parent / "datasets/sample/iot23_sample.parquet"
 ATTACK_CLASSES_PATH = MODEL_DIR / "attack_classes.json"
 EVERYTHING_CLASSES_PATH = MODEL_DIR / "everything_classes.json"
 
@@ -47,12 +46,9 @@ def load_everything_model():
     return classifier, classes
 
 
-def load_training_reference(path=TRAINING_DATA_PATH):
-    df = load_dataset(path)
-    return {
-        "proto": pd.Index(sorted(df["proto"].dropna().unique())),
-        "history": pd.Index(sorted(df["history"].dropna().unique())),
-    }
+def load_categories(model):
+    stored = model.get_booster().get_categories(export_to_arrow=True).to_arrow()
+    return {name: pd.Index(values.to_pylist()) for name, values in stored if values is not None}
 
 
 def _features(flow_df, categories, context_df=None):

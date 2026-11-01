@@ -77,9 +77,8 @@ scripts/run_suricata.{sh,ps1,bat}  # run Suricata on a pcap, logs into botnet-de
 - For training: the [IoT-23 dataset](https://www.stratosphereips.org/datasets-iot23), extracted
   into `botnet-detection/datasets/`
 
-The detector loads `botnet-detection/datasets/sample/iot23_sample.parquet` at start-up to know the
-categorical values (`proto`, `history`) seen during training, so this file must exist even when
-you only use the pretrained models (see [Preparing the data](#preparing-the-data)).
+Running the detector with the pretrained models needs no dataset: the categorical values seen
+during training (such as `proto`) are stored in the models themselves.
 
 ## Installation
 

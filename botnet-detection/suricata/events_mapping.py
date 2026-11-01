@@ -53,7 +53,6 @@ def map_suricata_events_to_features_data(suricata_events: list[SuricataEvent], t
 
 def flow_df_to_features(flow_df: pd.DataFrame, time_window: str, categories: dict = None) -> pd.DataFrame:
     flow_df = flow_df.copy()
-    if categories is not None:
-        flow_df["proto"] = pd.Categorical(flow_df["proto"], categories=categories["proto"])
-        flow_df["history"] = pd.Categorical(flow_df["history"], categories=categories["history"])
+    for column, column_categories in (categories or {}).items():
+        flow_df[column] = pd.Categorical(flow_df[column], categories=column_categories)
     return create_features_df(flow_df, time_window)

@@ -2,7 +2,7 @@ import json
 import pandas as pd
 from suricata.events_mapping import map_suricata_events_to_flow_df
 from model import features
-from model.predict import load_everything_model, load_models, load_training_reference, predict, predict_everything
+from model.predict import load_categories, load_everything_model, load_models, predict, predict_everything
 from pathlib import Path
 from suricata.suricata_event import SuricataEvent
 from suricata.suricata_event_logger import SuricataEventLogger
@@ -19,11 +19,13 @@ class BotnetDetector:
             raise ValueError(f"Unknown model {model!r}, expected one of {MODEL_CHOICES}")
         self.threshold = threshold
         self.model = model
-        self.categories = load_training_reference()
         if model == "everything":
             self.everything_classifier, self.everything_classes = load_everything_model()
+            self.categories = load_categories(self.everything_classifier)
         else:
             self.botnet_detector, self.attack_classifier, self.attack_classes = load_models()
+            # Both split models are trained on the same feature table, so they share categories
+            self.categories = load_categories(self.botnet_detector)
         self.logger = SuricataEventLogger(Path(__file__).parent / "suricata" / "botnet-detector.log", model)
         self.context_df = None
 
