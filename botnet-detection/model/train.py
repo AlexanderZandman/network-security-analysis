@@ -2,7 +2,9 @@ import json
 from pathlib import Path
 
 import joblib
-import numpy as np
+import numpy as np 
+from xgboost import XGBClassifier
+import xgboost as xgb
 import pandas as pd
 from sklearn.metrics import classification_report, roc_auc_score, average_precision_score
 from sklearn.model_selection import StratifiedGroupKFold
@@ -12,6 +14,11 @@ from model.features import ATTACK, BENIGN_LABEL, FEATURE_TIME_WINDOW, NINEWAY, c
 
 MODEL_DIR = Path(__file__).parent / "saved-models"
 TRAINING_SAMPLED_DATA_PATH = "datasets/combined/combined-training-trimmed.parquet"
+
+# Label mapping for the attack classifier
+ATK_LABEL_MAP = {"attack": 0, "scanning": 1, "c2": 2}
+ATK_LABEL_NAMES = {0: "attack", 1: "scanning", 2: "c2",}
+
 
 def train_botnet_detector(df, features_df, categorized_labels):
     # y = 1 if the row is a botnet row, 0 if the row is a benign row
@@ -57,7 +64,7 @@ def train_botnet_detector(df, features_df, categorized_labels):
     botnet_indices = np.where(predicted_classes == 1)[0]
     predicted_botnet_rows = features_df.iloc[botnet_indices]
     print(f"Number of predicted botnet rows: {len(predicted_botnet_rows)}")
-    print(f"First 10 predicted botnet rows:\n{predicted_botnet_rows.head(10)}")
+    print(f"First 10 predicted botnet rows:\n{predicted_botnet_rows.head(10).to_dict(orient='records')}")
 
     return botnet_detector, predicted_botnet_rows
 
@@ -185,6 +192,36 @@ def save_models(botnet_detector = None, attack_classifier = None, everything_cla
         (MODEL_DIR / "everything_classes.json").write_text(json.dumps(list(everything_classes)))
     print(f"models saved to {MODEL_DIR}")
 
+def test_attack_classifier(df, categorized_labels, labels_vector, predicted_rows_indices):
+    # False positive and false negative analysis
+    # False negative: benign rows that are predicted as botnet
+    selected_labels = categorized_labels.loc[predicted_rows_indices]
+    benign_rows = selected_labels.eq("benign").sum()
+    malicious_rows = selected_labels.ne("benign").sum()    
+    total_number_of_benign_rows = categorized_labels.eq("benign").sum()
+    total_number_of_malicious_rows = categorized_labels.ne("benign").sum()
+
+    print(f"Number of benign rows in the predicted botnet rows: {benign_rows}")
+    print(f"Number of malicious rows in the predicted botnet rows: {malicious_rows}")
+    print(f"Total number of benign rows in the dataset: {total_number_of_benign_rows}")
+    print(f"Total number of malicious rows in the dataset: {total_number_of_malicious_rows}")
+    print(f"Percentage of malicious rows caught by the binary classifier: {malicious_rows / total_number_of_malicious_rows * 100:.2f}%")
+    print(f"Percentage of benign rows falsely classified as malicious by the binary classifier: {benign_rows / total_number_of_benign_rows * 100:.2f}%")
+
+    # Get the features for the predicted botnet rows
+    features_df = create_features_df(df.loc[predicted_rows_indices], time_window="1min")
+
+    # Load the trained attack classifier model
+    model = xgb.XGBClassifier()
+    model.load_model(MODEL_DIR / "attack_classifier.json")
+
+    # Get the predicted labels for the predicted botnet rows
+    predicted_labels = model.predict(features_df)
+    print(f"Predicted labels for {len(predicted_labels)} predicted botnet rows: {predicted_labels[:10]}")
+    predicted_labels = pd.Series(predicted_labels).map(ATK_LABEL_NAMES)
+    print(f"Classification report for the predicted botnet rows:")
+    print(classification_report(categorized_labels.loc[predicted_rows_indices], predicted_labels, digits=4, zero_division=0))
+    print(pd.crosstab(categorized_labels.loc[predicted_rows_indices], predicted_labels, rownames=["true"], colnames=["predicted"]))
 
 def main():
     # Positional cross-validation indices are used as labels with .loc, so the index must be 0..n-1
