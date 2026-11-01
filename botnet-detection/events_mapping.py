@@ -1,16 +1,16 @@
-from suricata_event import Suricata_Event, Flow, TCP
+from suricata.suricata_event import SuricataEvent, Flow, TCP
 import pandas as pd
 from datetime import datetime, timedelta
 
-def map_suricata_events_to_dataframe(suricata_events: list[Suricata_Event]) -> pd.DataFrame:
+def map_suricata_events_to_dataframe(suricata_events: list[SuricataEvent]) -> pd.DataFrame:
 
     # Initialize an empty list to hold the event dictionaries
     events_as_dict = []
 
-    # Loop through each Suricata_Event object and convert it to a dictionary
+    # Loop through each SuricataEvent object and convert it to a dictionary
     for event in suricata_events:
-        if not isinstance(event, Suricata_Event):
-            raise TypeError(f"Expected Suricata_Event, got {type(event)}")
+        if not isinstance(event, SuricataEvent):
+            raise TypeError(f"Expected SuricataEvent, got {type(event)}")
         
         # Calculate duration in seconds and determine if it's a single packet flow
         end = datetime.strptime(event.flow.end, "%Y-%m-%dT%H:%M:%S.%f%z")

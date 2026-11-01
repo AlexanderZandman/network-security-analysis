@@ -1,6 +1,8 @@
+from pathlib import Path
+
 import pandas as pd
 
-DATA_PATH = "data/CTU-IoT-Malware-Capture-34-1.parquet"
+DATA_PATH = Path(__file__).parent.parent / "datasets/sample/iot23_sample.parquet"
 
 # Attacks are grouped into three categories: scanning, attack, and C&C.
 # Sidenote: C&C is command and control, which is the communication channel between the botnet and the botnet operator.
@@ -12,6 +14,16 @@ ATTACK = {
     "C&C": "c2", "C&C-HeartBeat": "c2", "C&C-Torii": "c2", "C&C-Mirai": "c2",
     "C&C-FileDownload": "c2", "C&C-HeartBeat-FileDownload": "c2", "FileDownload": "c2",
 }
+
+# 9-way classes: every C&C-* label is merged into C&C, all other detailed labels (and Benign) stay as they are.
+# Benign, PartOfAHorizontalPortScan, PartOfAHorizontalPortScan-Attack, Okiru, Okiru-Attack, DDoS, Attack,
+# FileDownload, C&C
+BENIGN_LABEL = "Benign"
+NINEWAY = {label: "C&C" if label.startswith("C&C") else label for label in [BENIGN_LABEL, *ATTACK]}
+
+# Time window of the *_in_time_window features, for every model. Used by both model/train.py and
+# model/predict.py, so the models always get features computed the way they were trained.
+FEATURE_TIME_WINDOW = "1min"
 
 CATEGORICAL = ("proto", "history")
 
@@ -41,7 +53,7 @@ def prepare_df(input_df):
     )
 
     # -----Deal with NaN values-----
-    
+
     # Fields that can be NaN:
     #   service - string
     #   duration - numeric
@@ -84,7 +96,7 @@ def undersample(input_df):
 
     return balanced_df
 
-def create_features_df(input_df, time_window="10s"):
+def create_features_df(input_df, time_window):
     """
         Create a dataframe of features for a given type of classification model.
     """
@@ -101,11 +113,11 @@ def create_features_df(input_df, time_window="10s"):
         "is_single_pkt": (input_df["duration"] == 0).astype(int),
         "has_response": (input_df["resp_pkts"] > 0).astype(int),
         # "history": input_df["history"].astype("category"),
-        # how many connections are made to the same destination host in a 10-minute time_window
+        # how many connections are made to the same destination host in the time window
         "dst_conn_cnt_in_time_window": dst["uid"].transform("size"),
-        # how many unique source hosts are connecting to the same destination host in a 10-minute time_window
+        # how many unique source hosts are connecting to the same destination host in the time window
         "dst_uniq_src_ip_in_time_window": dst["id.orig_h"].transform("nunique"),
-        # what the source host does in this 1-minute time window (for example scanning or propagation)
+        # what the source host does in the time window (for example scanning or propagation)
         "src_conn_cnt_in_time_window": src["uid"].transform("size"),
         "src_uniq_dst_ip_in_time_window": src["id.resp_h"].transform("nunique"),
         "src_uniq_dst_port_in_time_window": src["id.resp_p"].transform("nunique"),

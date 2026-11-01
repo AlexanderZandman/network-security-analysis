@@ -4,7 +4,7 @@ from sklearn.metrics import classification_report, roc_auc_score, average_precis
 from sklearn.model_selection import StratifiedGroupKFold
 from xgboost import XGBClassifier
 
-from features import ATTACK, create_features_df, load_dataset
+from model.features import ATTACK, FEATURE_TIME_WINDOW, create_features_df, load_dataset
 
 
 def evaluate_botnet_vs_benign_classification(features_df, cross_validation, y, groups, detailed_label):
@@ -72,7 +72,7 @@ def evaluate_botnet_attack_type_classification(cross_validation, features_df, y,
 
 def main():
     df = load_dataset()
-    features_df = create_features_df(df)
+    features_df = create_features_df(df, time_window=FEATURE_TIME_WINDOW)
     y = (df["label"] == "malicious").astype(int)
     groups = df["scenario"]
 

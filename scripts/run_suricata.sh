@@ -13,7 +13,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 CONFIG="${REPO_ROOT}/botnet-detection/config/suricata.yaml"
-DEFAULT_PCAP="${REPO_ROOT}/botnet-detection/datasets/opt/Malware-Project/BigDataset/IoTScenarios/CTU-IoT-Malware-Capture-1-1/2018-05-09-192.168.100.103.pcap"
+DEFAULT_PCAP="${REPO_ROOT}/botnet-detection/datasets/opt/Malware-Project/BigDataset/IoTScenarios/CTU-IoT-Malware-Capture-52-1/2019-03-08-13-24-30-192.168.1.197.pcap"
 LOG_DIR="${REPO_ROOT}/botnet-detection/logs"
 
 PCAP="${1:-${DEFAULT_PCAP}}"

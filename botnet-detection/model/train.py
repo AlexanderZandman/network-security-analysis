@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import joblib
@@ -5,18 +6,21 @@ import numpy as np
 from xgboost import XGBClassifier
 import xgboost as xgb
 import pandas as pd
-from features import ATTACK, create_features_df, load_dataset, undersample
-from sklearn.model_selection import train_test_split, StratifiedKFold, StratifiedGroupKFold
 from sklearn.metrics import classification_report, roc_auc_score, average_precision_score
+from sklearn.model_selection import StratifiedGroupKFold
+from xgboost import XGBClassifier
+
+from model.features import ATTACK, BENIGN_LABEL, FEATURE_TIME_WINDOW, NINEWAY, create_features_df
 
 MODEL_DIR = Path(__file__).parent / "saved-models"
+TRAINING_SAMPLED_DATA_PATH = "datasets/combined/combined-training-trimmed.parquet"
 
 # Label mapping for the attack classifier
 ATK_LABEL_MAP = {"attack": 0, "scanning": 1, "c2": 2}
 ATK_LABEL_NAMES = {0: "attack", 1: "scanning", 2: "c2",}
 
 
-def train_botnet_detector(df, categorized_labels):
+def train_botnet_detector(df, features_df, categorized_labels):
     # y = 1 if the row is a botnet row, 0 if the row is a benign row
     y = categorized_labels.ne("benign").astype(int)
 
@@ -40,14 +44,14 @@ def train_botnet_detector(df, categorized_labels):
 
     cross_validation = StratifiedGroupKFold(n_splits=3, shuffle=True, random_state=42)
     oof = np.zeros(len(df))
-    features_df = create_features_df(df, time_window="5s")
     for train_idx, test_idx in cross_validation.split(df, y, df["scenario"]):
         train = features_df.loc[train_idx]
         #TODO: needs to be undersampled
         test = features_df.loc[test_idx]
         botnet_detector.fit(train, y.loc[train_idx])
         oof[test_idx] = botnet_detector.predict_proba(test)[:, 1]
-    
+
+    botnet_detector.fit(features_df, y)
     print(f"Botnet detector trained")
     print("Botnet vs Benign Classification Report: ")
     print(f"ROC-AUC = {roc_auc_score(y, oof):.4f}")
@@ -64,28 +68,66 @@ def train_botnet_detector(df, categorized_labels):
 
     return botnet_detector, predicted_botnet_rows
 
-def train_attack_classifier(df, categorized_labels, y):
+def _fit_multiclass_cv(classifier, features_df, y, weights, groups):
+    cross_validation = StratifiedGroupKFold(n_splits=3, shuffle=True, random_state=42)
+    oof = np.full(len(y), -1, dtype=np.int64)
 
-    # Get the indices of rows that are botnet rows
+    for train_idx, test_idx in cross_validation.split(features_df, y, groups):
+        # Rare classes can be missing from a training fold (folds are grouped by scenario), and XGBoost
+        # needs the labels to be 0..k-1, so remap to the classes present in this fold and map back after.
+        fold_classes = np.unique(y.iloc[train_idx])
+        classifier.fit(
+            features_df.loc[train_idx],
+            np.searchsorted(fold_classes, y.iloc[train_idx]),
+            sample_weight=weights.iloc[train_idx]
+        )
+        oof[test_idx] = fold_classes[classifier.predict(features_df.loc[test_idx]).astype(np.int64)]
+
+    # Final model on all rows, so it knows every class
+    classifier.fit(features_df, y, sample_weight=weights)
+    return oof
+
+
+def _print_multiclass_report(title, y, oof, class_names):
+    names = np.array(class_names)
+    print(title)
+    print(classification_report(y.to_numpy(dtype=np.int64), oof, labels=np.arange(len(names)),
+                                target_names=names, digits=4, zero_division=0))
+    print(pd.crosstab(names[y.to_numpy(dtype=np.int64)], names[oof], rownames=["true"], colnames=["predicted"]))
+
+
+def _nineway_labels(detailed_labels):
+    labels = detailed_labels.map(NINEWAY)
+    unknown = detailed_labels[labels.isna()]
+    assert unknown.empty, (f"{len(unknown):,} row(s) with a detailed_label not in NINEWAY: "
+                           f"{unknown.value_counts(dropna=False).to_dict()}")
+    return labels
+
+
+def _encode(labels):
+    class_names = sorted(labels.unique())
+    y = labels.map({name: i for i, name in enumerate(class_names)}).reset_index(drop=True)
+    counts = y.value_counts()
+    weights = y.map(np.sqrt(counts.max() / counts))
+    print(f"{len(class_names)} classes with counts: {labels.value_counts().to_dict()}")
+    return class_names, y, weights
+
+
+def train_attack_classifier(df, features_df, categorized_labels, detailed_labels):
+    # Only the botnet rows: the attack classifier runs on the flows the botnet detector flags,
+    # so it covers the 9-way classes without Benign
+    # num_class is inferred from y on every fit, since a fold can miss rare classes
     botnet_mask = categorized_labels.ne("benign")
-    
     filtered_df = df.loc[botnet_mask].copy().reset_index(drop=True)
-    features_df = create_features_df(filtered_df, time_window="1min")
+    # features_df is computed over all flows and only then filtered to the botnet rows: at prediction time
+    # the window counts include the benign flows too, since it is not known which flows are botnet
+    features_df = features_df.loc[botnet_mask].reset_index(drop=True)
 
-    # Get the labels for the attack classifier, which are only the botnet rows
-    y_attack = categorized_labels.loc[botnet_mask].map(ATK_LABEL_MAP).reset_index(drop=True)
-
-    # Get the unique classes and their counts for the attack rows
-    attack_classes = np.array(sorted(y_attack.unique()))
-
-    # Get the counts for each class in the attack rows
-    attack_counts = y_attack.value_counts()
-    attack_weights = y_attack.map(np.sqrt(attack_counts.max() / attack_counts))
-
-    print(f"Training attack classifier for {len(attack_classes)} classes: {attack_classes} with counts: {attack_counts.to_dict()}")
+    print("Training attack classifier")
+    attack_class_names, y_attack, attack_weights = _encode(_nineway_labels(detailed_labels.loc[botnet_mask]))
     attack_classifier = XGBClassifier(
         n_estimators=800,
-        max_depth=5,             
+        max_depth=5,
         learning_rate=0.05,
         min_child_weight=3,
         subsample=0.8,
@@ -95,54 +137,23 @@ def train_attack_classifier(df, categorized_labels, y):
         tree_method="hist",
         enable_categorical=True,
         objective="multi:softprob",
-        num_class=3,
         eval_metric="mlogloss",
         random_state=50
     )
 
-    cross_validation = StratifiedGroupKFold(n_splits=3, shuffle=True, random_state=42)
-    oof = np.full(len(filtered_df), -1, dtype=np.int64)
+    oof = _fit_multiclass_cv(attack_classifier, features_df, y_attack, attack_weights, filtered_df["scenario"])
+    print("Attack classifier trained")
+    _print_multiclass_report("Attack Type Classification Report: ", y_attack, oof, attack_class_names)
 
-    for train_idx, test_idx in cross_validation.split(filtered_df, y_attack, filtered_df["scenario"]):
-        train = features_df.loc[train_idx]
-        test = features_df.loc[test_idx]
+    return attack_classifier, attack_class_names
 
-        train_y = y_attack.iloc[train_idx]
 
-        attack_classifier.fit(
-            train, 
-            train_y, 
-            sample_weight=attack_weights.iloc[train_idx]
-        )
-
-        result = attack_classifier.predict(test).astype(np.int64)
-        print("RESULT")
-        print(result)
-        oof[test_idx] = attack_classes[result]
-        
-    print(f"Attack classifier trained")
-
-    print("Attack Type Classification Report: ")
-    print(classification_report(y_attack.to_numpy(dtype=np.int64), oof, digits=4, zero_division=0))
-    print(pd.crosstab(y_attack, oof, rownames=["true"], colnames=["predicted"])) 
-
-    return attack_classifier
-
-def train_everything_classifier(df, categorised_labels):
-    # Get all the unique types of attacks
-    attack_types = set(categorised_labels)
-    print(f"Training everything classifier for {len(attack_types)} classes: {list(attack_types)}")
-    # Convert it to a map
-    mapping = {item: i for i, item in enumerate(attack_types)}
-    print(f"Everything classifier mapping: {mapping}")
-    # Map the normal labels to the new mapping
-    y_multi = categorised_labels.map(mapping)
-    print (f"Everything classifier labels: {y_multi.head()} \n")
-    # Get the counts for each class in the new mapping
-    all_counts = y_multi.value_counts()
-    print(f"Everything classifier counts: {all_counts.to_dict()}")
-    # Get the weights for each class
-    all_weights = y_multi.map(np.sqrt(all_counts.max() / all_counts))
+def train_everything_classifier(df, features_df, detailed_labels):
+    # Single-stage 9-way classifier: Benign + every attack class
+    # num_class is inferred from y on every fit, since a fold can miss rare classes
+    print("Training everything classifier")
+    everything_class_names, y_multi, all_weights = _encode(_nineway_labels(detailed_labels))
+    assert BENIGN_LABEL in everything_class_names, f"no {BENIGN_LABEL} rows in the training data"
     everything_classifier = XGBClassifier(
         n_estimators=800,
         max_depth=5,
@@ -155,44 +166,30 @@ def train_everything_classifier(df, categorised_labels):
         tree_method="hist",
         enable_categorical=True,
         objective="multi:softprob",
-        num_class=len(attack_types),
         eval_metric="mlogloss",
         random_state=50
     )
 
-    cross_validation = StratifiedGroupKFold(n_splits=3, shuffle=True, random_state=42)
-    oof = np.full(len(y_multi), -1, dtype=np.int64)
+    oof = _fit_multiclass_cv(everything_classifier, features_df, y_multi, all_weights, df["scenario"])
+    print("Everything classifier trained")
+    _print_multiclass_report("Direct Classification Report: ", y_multi, oof, everything_class_names)
 
-    features_df = create_features_df(df, time_window="1min")
-    for train_idx, test_idx in cross_validation.split(df, y_multi, df["scenario"]):
-        train = features_df.loc[train_idx]
-        test = features_df.loc[test_idx]
-
-        everything_classifier.fit(
-                train, 
-                y_multi.iloc[train_idx], 
-                sample_weight=all_weights.iloc[train_idx]
-        )
-        predictions = everything_classifier.predict(test).astype(np.int64)
-        oof[test_idx] = predictions
-
-    print(f"Everything classifier trained") 
-
-    print("Direct Classification Report: ")
-    print(classification_report(y_multi.to_numpy(dtype=np.int64), oof, digits=4, zero_division=0))
-    print(pd.crosstab(y_multi.to_numpy(dtype=np.int64), oof, rownames=["true"], colnames=["predicted"]))
-
-    return everything_classifier
+    return everything_classifier, everything_class_names
 
 # Save the trained models to disk and if not provided, skip it.
-def save_models(botnet_detector = None, attack_classifier = None, everything_classifier = None):
+def save_models(botnet_detector = None, attack_classifier = None, everything_classifier = None,
+                attack_classes = None, everything_classes = None):
     MODEL_DIR.mkdir(parents=True, exist_ok=True)
     if botnet_detector is not None:
-        botnet_detector.save_model(MODEL_DIR / "botnet_detector.json")
+        joblib.dump(botnet_detector, MODEL_DIR / "botnet_detector.pkl")
     if attack_classifier is not None:
-        attack_classifier.save_model(MODEL_DIR / "attack_classifier.json")
+        joblib.dump(attack_classifier, MODEL_DIR / "attack_classifier.pkl")
+    if attack_classes is not None:
+        (MODEL_DIR / "attack_classes.json").write_text(json.dumps(list(attack_classes)))
     if everything_classifier is not None:
-        everything_classifier.save_model(MODEL_DIR / "everything_classifier.pkl")
+        joblib.dump(everything_classifier, MODEL_DIR / "everything_classifier.pkl")
+    if everything_classes is not None:
+        (MODEL_DIR / "everything_classes.json").write_text(json.dumps(list(everything_classes)))
     print(f"models saved to {MODEL_DIR}")
 
 def test_attack_classifier(df, categorized_labels, labels_vector, predicted_rows_indices):
@@ -227,10 +224,13 @@ def test_attack_classifier(df, categorized_labels, labels_vector, predicted_rows
     print(pd.crosstab(categorized_labels.loc[predicted_rows_indices], predicted_labels, rownames=["true"], colnames=["predicted"]))
 
 def main():
-    TRAINING_SAMPLED_DATA_PATH = "data/combined-training/combined-training-trimmed.parquet"
-
-    sample_df = pd.read_parquet(TRAINING_SAMPLED_DATA_PATH)
+    # Positional cross-validation indices are used as labels with .loc, so the index must be 0..n-1
+    sample_df = pd.read_parquet(TRAINING_SAMPLED_DATA_PATH).reset_index(drop=True)
     labels_vector = sample_df["detailed_label"]
+    # Benign rows can have an empty detailed_label; give them the Benign class
+    benign_without_label = labels_vector.isna() & sample_df["label"].str.lower().eq("benign")
+    print(f"Rows with label=benign and no detailed_label, set to {BENIGN_LABEL}: {benign_without_label.sum():,}")
+    labels_vector = labels_vector.mask(benign_without_label, BENIGN_LABEL)
     categorized_labels = labels_vector.map(ATTACK).fillna("benign")
 
     print(f"Training rows: {len(sample_df):,} with a class distribution:")
@@ -238,12 +238,14 @@ def main():
     print(f"Categorised labels: {categorized_labels.head()} \n")
     print(f"Normal labels: {labels_vector.head()} \n")
 
-    botnet_detector, predicted_rows = train_botnet_detector(sample_df, categorized_labels)
-    test_attack_classifier(sample_df, categorized_labels, labels_vector, predicted_rows.index)
-    # attack_classifier = train_attack_classifier(sample_df, categorized_labels, labels_vector)
-    # everything_classifier = train_everything_classifier(sample_df, categorized_labels)
+    # One feature table for all models; they all use the same time window
+    features_df = create_features_df(sample_df, time_window=FEATURE_TIME_WINDOW)
 
-    # save_models(botnet_detector, attack_classifier, everything_classifier)
+    botnet_detector, _ = train_botnet_detector(sample_df, features_df, categorized_labels)
+    attack_classifier, attack_classes = train_attack_classifier(sample_df, features_df, categorized_labels, labels_vector)
+    everything_classifier, everything_classes = train_everything_classifier(sample_df, features_df, labels_vector)
+
+    save_models(botnet_detector, attack_classifier, everything_classifier, attack_classes, everything_classes)
     print("Training complete. Models saved to disk.")
 
 if __name__ == "__main__":
