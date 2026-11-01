@@ -8,12 +8,12 @@ from sklearn.metrics import classification_report, roc_auc_score, average_precis
 from sklearn.model_selection import StratifiedGroupKFold
 from xgboost import XGBClassifier
 
-from model.features import ATTACK, BENIGN_LABEL, NINEWAY, create_features_df
+from model.features import ATTACK, BENIGN_LABEL, FEATURE_TIME_WINDOW, NINEWAY, create_features_df
 
 MODEL_DIR = Path(__file__).parent / "saved-models"
 TRAINING_SAMPLED_DATA_PATH = "datasets/combined/combined-training-trimmed.parquet"
 
-def train_botnet_detector(df, categorized_labels):
+def train_botnet_detector(df, features_df, categorized_labels):
     # y = 1 if the row is a botnet row, 0 if the row is a benign row
     y = categorized_labels.ne("benign").astype(int)
 
@@ -37,7 +37,6 @@ def train_botnet_detector(df, categorized_labels):
 
     cross_validation = StratifiedGroupKFold(n_splits=3, shuffle=True, random_state=42)
     oof = np.zeros(len(df))
-    features_df = create_features_df(df, time_window="5s")
     for train_idx, test_idx in cross_validation.split(df, y, df["scenario"]):
         train = features_df.loc[train_idx]
         #TODO: needs to be undersampled
@@ -107,13 +106,15 @@ def _encode(labels):
     return class_names, y, weights
 
 
-def train_attack_classifier(df, categorized_labels, detailed_labels):
+def train_attack_classifier(df, features_df, categorized_labels, detailed_labels):
     # Only the botnet rows: the attack classifier runs on the flows the botnet detector flags,
     # so it covers the 9-way classes without Benign
     # num_class is inferred from y on every fit, since a fold can miss rare classes
     botnet_mask = categorized_labels.ne("benign")
     filtered_df = df.loc[botnet_mask].copy().reset_index(drop=True)
-    features_df = create_features_df(filtered_df, time_window="1min")
+    # features_df is computed over all flows and only then filtered to the botnet rows: at prediction time
+    # the window counts include the benign flows too, since it is not known which flows are botnet
+    features_df = features_df.loc[botnet_mask].reset_index(drop=True)
 
     print("Training attack classifier")
     attack_class_names, y_attack, attack_weights = _encode(_nineway_labels(detailed_labels.loc[botnet_mask]))
@@ -140,7 +141,7 @@ def train_attack_classifier(df, categorized_labels, detailed_labels):
     return attack_classifier, attack_class_names
 
 
-def train_everything_classifier(df, detailed_labels):
+def train_everything_classifier(df, features_df, detailed_labels):
     # Single-stage 9-way classifier: Benign + every attack class
     # num_class is inferred from y on every fit, since a fold can miss rare classes
     print("Training everything classifier")
@@ -162,7 +163,6 @@ def train_everything_classifier(df, detailed_labels):
         random_state=50
     )
 
-    features_df = create_features_df(df, time_window="1min")
     oof = _fit_multiclass_cv(everything_classifier, features_df, y_multi, all_weights, df["scenario"])
     print("Everything classifier trained")
     _print_multiclass_report("Direct Classification Report: ", y_multi, oof, everything_class_names)
@@ -187,7 +187,8 @@ def save_models(botnet_detector = None, attack_classifier = None, everything_cla
 
 
 def main():
-    sample_df = pd.read_parquet(TRAINING_SAMPLED_DATA_PATH)
+    # Positional cross-validation indices are used as labels with .loc, so the index must be 0..n-1
+    sample_df = pd.read_parquet(TRAINING_SAMPLED_DATA_PATH).reset_index(drop=True)
     labels_vector = sample_df["detailed_label"]
     # Benign rows can have an empty detailed_label; give them the Benign class
     benign_without_label = labels_vector.isna() & sample_df["label"].str.lower().eq("benign")
@@ -200,9 +201,12 @@ def main():
     print(f"Categorised labels: {categorized_labels.head()} \n")
     print(f"Normal labels: {labels_vector.head()} \n")
 
-    botnet_detector, _ = train_botnet_detector(sample_df, categorized_labels)
-    attack_classifier, attack_classes = train_attack_classifier(sample_df, categorized_labels, labels_vector)
-    everything_classifier, everything_classes = train_everything_classifier(sample_df, labels_vector)
+    # One feature table for all models; they all use the same time window
+    features_df = create_features_df(sample_df, time_window=FEATURE_TIME_WINDOW)
+
+    botnet_detector, _ = train_botnet_detector(sample_df, features_df, categorized_labels)
+    attack_classifier, attack_classes = train_attack_classifier(sample_df, features_df, categorized_labels, labels_vector)
+    everything_classifier, everything_classes = train_everything_classifier(sample_df, features_df, labels_vector)
 
     save_models(botnet_detector, attack_classifier, everything_classifier, attack_classes, everything_classes)
     print("Training complete. Models saved to disk.")

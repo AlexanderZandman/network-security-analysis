@@ -21,6 +21,10 @@ ATTACK = {
 BENIGN_LABEL = "Benign"
 NINEWAY = {label: "C&C" if label.startswith("C&C") else label for label in [BENIGN_LABEL, *ATTACK]}
 
+# Time window of the *_in_time_window features, for every model. Used by both model/train.py and
+# model/predict.py, so the models always get features computed the way they were trained.
+FEATURE_TIME_WINDOW = "1min"
+
 CATEGORICAL = ("proto", "history")
 
 RANDOM_SEED = 68 - 1
@@ -92,7 +96,7 @@ def undersample(input_df):
 
     return balanced_df
 
-def create_features_df(input_df, time_window="10s"):
+def create_features_df(input_df, time_window):
     """
         Create a dataframe of features for a given type of classification model.
     """
@@ -109,11 +113,11 @@ def create_features_df(input_df, time_window="10s"):
         "is_single_pkt": (input_df["duration"] == 0).astype(int),
         "has_response": (input_df["resp_pkts"] > 0).astype(int),
         # "history": input_df["history"].astype("category"),
-        # how many connections are made to the same destination host in a 10-minute time_window
+        # how many connections are made to the same destination host in the time window
         "dst_conn_cnt_in_time_window": dst["uid"].transform("size"),
-        # how many unique source hosts are connecting to the same destination host in a 10-minute time_window
+        # how many unique source hosts are connecting to the same destination host in the time window
         "dst_uniq_src_ip_in_time_window": dst["id.orig_h"].transform("nunique"),
-        # what the source host does in this 1-minute time window (for example scanning or propagation)
+        # what the source host does in the time window (for example scanning or propagation)
         "src_conn_cnt_in_time_window": src["uid"].transform("size"),
         "src_uniq_dst_ip_in_time_window": src["id.resp_h"].transform("nunique"),
         "src_uniq_dst_port_in_time_window": src["id.resp_p"].transform("nunique"),

@@ -1,12 +1,15 @@
 import json
 import pandas as pd
 from suricata.events_mapping import map_suricata_events_to_flow_df
+from model import features
 from model.predict import load_everything_model, load_models, load_training_reference, predict, predict_everything
 from pathlib import Path
 from suricata.suricata_event import SuricataEvent
 from suricata.suricata_event_logger import SuricataEventLogger
 
-FEATURE_TIME_WINDOW = pd.Timedelta(minutes=1)
+# Context flows are kept per feature time window, so the window features of a new flow
+# also count the earlier flows in its window
+FEATURE_TIME_WINDOW = pd.Timedelta(features.FEATURE_TIME_WINDOW)
 MAX_CONTEXT_FLOWS = 250_000
 MODEL_CHOICES = ("split", "everything")
 

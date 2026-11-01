@@ -45,15 +45,15 @@ def map_suricata_events_to_flow_df(suricata_events: list[SuricataEvent], scenari
     return df.dropna(subset=["ts"]).reset_index(drop=True)
 
 
-def map_suricata_events_to_features_data(suricata_events: list[SuricataEvent], categories: dict = None,
-                                         scenario: str = "suricata-eve") -> pd.DataFrame:
+def map_suricata_events_to_features_data(suricata_events: list[SuricataEvent], time_window: str,
+                                         categories: dict = None, scenario: str = "suricata-eve") -> pd.DataFrame:
     flow_df = map_suricata_events_to_flow_df(suricata_events, scenario=scenario)
-    return flow_df_to_features(flow_df, categories)
+    return flow_df_to_features(flow_df, time_window, categories)
 
 
-def flow_df_to_features(flow_df: pd.DataFrame, categories: dict = None) -> pd.DataFrame:
+def flow_df_to_features(flow_df: pd.DataFrame, time_window: str, categories: dict = None) -> pd.DataFrame:
     flow_df = flow_df.copy()
     if categories is not None:
         flow_df["proto"] = pd.Categorical(flow_df["proto"], categories=categories["proto"])
         flow_df["history"] = pd.Categorical(flow_df["history"], categories=categories["history"])
-    return create_features_df(flow_df)
+    return create_features_df(flow_df, time_window)
