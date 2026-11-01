@@ -9,15 +9,28 @@ class SuricataEventLogger:
     # ML-raised alerts are easy to tell apart from real Suricata signature hits.
     ML_ALERT_GID = 9000000
 
-    ATTACK_SIGNATURE_ID = {"c2": 1, "attack": 2, "scanning": 3}
-
-    ATTACK_CATEGORY = {
-        "c2": "Command and Control Communication Detected",
-        "attack": "Potentially Malicious Traffic",
-        "scanning": "Attempted Reconnaissance (Scanning)",
+    # attack type (9-way class, see NINEWAY in model/features.py) -> (signature id, classification).
+    # Ids are fixed per class so they stay stable when the classifier is retrained.
+    ATTACK_SIGNATURES = {
+        "C&C": (1, "Command and Control Communication Detected"),
+        "Attack": (2, "Potentially Malicious Traffic"),
+        "DDoS": (3, "Detection of a Denial of Service Attack"),
+        "PartOfAHorizontalPortScan": (4, "Detection of a Network Scan"),
+        "PartOfAHorizontalPortScan-Attack": (5, "Detection of a Network Scan with Attack Traffic"),
+        "Okiru": (6, "Okiru Botnet Activity Detected"),
+        "Okiru-Attack": (7, "Okiru Botnet Attack Detected"),
+        "FileDownload": (8, "Malicious File Download Detected"),
     }
-    def __init__(self, log_file):
+    UNKNOWN_SIGNATURE = (99, "Potentially Bad Traffic")
+
+    @classmethod
+    def signature_for(cls, attack_type):
+        # Signature id and classification of an attack type
+        return cls.ATTACK_SIGNATURES.get(attack_type, cls.UNKNOWN_SIGNATURE)
+
+    def __init__(self, log_file, model_name):
         self.log_file = log_file
+        self.model_name = model_name
 
     def log_event(self, event):
         with open(self.log_file, 'a') as f:
@@ -25,8 +38,7 @@ class SuricataEventLogger:
 
     def format_fast_log_line(self, alert_row, detected_at):
         attack_type = alert_row["attack_type"]
-        sid = self.ATTACK_SIGNATURE_ID[attack_type]
-        category = self.ATTACK_CATEGORY[attack_type]
+        sid, category = self.signature_for(attack_type)
         signature = f"BOTNET DETECTED {attack_type.upper()} TRAFFIC (p={alert_row['botnet_probability']:.2f})"
         ts = detected_at.strftime("%m/%d/%Y-%H:%M:%S.%f")
         proto = (alert_row["proto"] or "").upper()
@@ -42,8 +54,7 @@ class SuricataEventLogger:
 
     def create_eve_alert(self, alert_row, detected_at):
         attack_type = alert_row["attack_type"]
-        sid = self.ATTACK_SIGNATURE_ID[attack_type]
-        category = self.ATTACK_CATEGORY[attack_type]
+        sid, category = self.signature_for(attack_type)
         signature = f"BOTNET DETECTED {attack_type.upper()} TRAFFIC"
         flow_start = pd.Timestamp(alert_row["ts"])
         flow_start = flow_start.tz_localize(timezone.utc) if flow_start.tzinfo is None else flow_start.tz_convert(
@@ -66,7 +77,7 @@ class SuricataEventLogger:
                 "category": category,
             },
             "ml": {
-                "model": "botnet_detector+attack_classifier",
+                "model": self.model_name,
                 "botnet_probability": round(float(alert_row["botnet_probability"]), 6),
                 "attack_type": attack_type,
                 "flow_start": flow_start.strftime("%Y-%m-%dT%H:%M:%S.%f%z"),

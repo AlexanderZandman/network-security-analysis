@@ -15,6 +15,12 @@ ATTACK = {
     "C&C-FileDownload": "c2", "C&C-HeartBeat-FileDownload": "c2", "FileDownload": "c2",
 }
 
+# 9-way classes: every C&C-* label is merged into C&C, all other detailed labels (and Benign) stay as they are.
+# Benign, PartOfAHorizontalPortScan, PartOfAHorizontalPortScan-Attack, Okiru, Okiru-Attack, DDoS, Attack,
+# FileDownload, C&C
+BENIGN_LABEL = "Benign"
+NINEWAY = {label: "C&C" if label.startswith("C&C") else label for label in [BENIGN_LABEL, *ATTACK]}
+
 CATEGORICAL = ("proto", "history")
 
 RANDOM_SEED = 68 - 1

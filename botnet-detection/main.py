@@ -1,14 +1,14 @@
 import argparse
 from pathlib import Path
 from time import sleep
-from botnetdetector import BotnetDetector
+from botnetdetector import MODEL_CHOICES, BotnetDetector
 from suricata.eve_consumer import EveConsumer
 
 DEFAULT_EVE_PATH = Path(__file__).parent / "logs/eve.json"
 
 def main(args):
     print("Starting program...")
-    botnet_detector = BotnetDetector(threshold=args.threshold)
+    botnet_detector = BotnetDetector(threshold=args.threshold, model=args.model)
     eve_tracker = EveConsumer(args.input, from_end=args.from_end)
     print(f"Following {args.input}, alerts go to {args.fast_log} and {args.alert_eve}")
 
@@ -40,6 +40,9 @@ if __name__ == "__main__":
                         help="Path to append fast.log-style alerts (default: <input dir>/ml_fast.log)")
     parser.add_argument("--alert-eve", type=Path, default=None,
                         help="Path to append eve.json-style alerts (default: <input dir>/ml_eve.json)")
+    parser.add_argument("--model", choices=MODEL_CHOICES, default="everything",
+                        help="split: botnet detector + attack classifier; everything: single everything_classifier "
+                             "(default: everything)")
     args = parser.parse_args()
 
     if not args.input.exists():
