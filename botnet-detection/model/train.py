@@ -39,7 +39,6 @@ def train_botnet_detector(df, features_df, categorized_labels):
     oof = np.zeros(len(df))
     for train_idx, test_idx in cross_validation.split(df, y, df["scenario"]):
         train = features_df.loc[train_idx]
-        #TODO: needs to be undersampled
         test = features_df.loc[test_idx]
         botnet_detector.fit(train, y.loc[train_idx])
         oof[test_idx] = botnet_detector.predict_proba(test)[:, 1]
